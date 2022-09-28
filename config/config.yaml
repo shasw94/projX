@@ -1,0 +1,49 @@
+env: production
+default_limit: 25
+max_limit: 100
+
+database:
+  host: localhost
+  port: 3306
+  name: projX
+  env: native
+  user: root
+  password:
+  sslmode: disable
+
+redis:
+  enable: true
+  host: localhost
+  port:
+  password:
+  database: 0
+
+cache:
+  enable: true
+  expiry_time: 3600
+
+jwt_auth:
+  signing_key: access
+  expired: 900
+  signing_refresh_key: refresh
+  expired_refresh_token: 1
+
+cors:
+  enable: false
+  allow_origins: ["*"]
+  allow_methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+  allow_headers: []
+  allow_credentials: true
+  max_age: 7200
+
+rate_limiter:
+  enable: false
+  count: 300
+  redis_db: 10
+
+casbin:
+  enable: true
+  debug: false
+  model: ""
+  auto_load: false
+  auto_load_interval: 60
