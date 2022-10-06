@@ -1,6 +1,8 @@
 package api
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/jinzhu/copier"
 	"github.com/shasw94/projX/app/interfaces"
@@ -9,8 +11,6 @@ import (
 	"github.com/shasw94/projX/pkg/errors"
 	gohttp "github.com/shasw94/projX/pkg/http/wrapper"
 	"github.com/shasw94/projX/pkg/utils"
-	"net/http"
-	"strconv"
 )
 
 // UserAPI handle user api
@@ -26,14 +26,14 @@ func NewUserAPI(service interfaces.IUserService) *UserAPI {
 func (u *UserAPI) GetByID(c *gin.Context) {
 	userID := c.Param("id")
 	ctx := c.Request.Context()
-	uid, err := strconv.ParseUint(userID, 10, 32)
-	if err != nil {
-		err = errors.Wrap(err, "API.GetByID")
-		logger.Error("Failed to get user: ", err)
-		c.JSON(http.StatusBadRequest, utils.PrepareResponse(nil, err.Error(), utils.ErrorGetDatabase))
-		return
-	}
-	user, err := u.service.GetByID(ctx, uint(uid))
+	// uid, err := strconv.ParseUint(userID, 10, 32)
+	// if err != nil {
+	// 	err = errors.Wrap(err, "API.GetByID")
+	// 	logger.Error("Failed to get user: ", err)
+	// 	c.JSON(http.StatusBadRequest, utils.PrepareResponse(nil, err.Error(), utils.ErrorGetDatabase))
+	// 	return
+	// }
+	user, err := u.service.GetByID(ctx, userID)
 	if err != nil {
 		err = errors.Wrap(err, "API.GetByID")
 		logger.Error("Failed to get user: ", err)

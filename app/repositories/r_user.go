@@ -4,10 +4,13 @@ import (
 	"github.com/jinzhu/copier"
 	"github.com/shasw94/projX/app/interfaces"
 	"github.com/shasw94/projX/app/models"
+	"github.com/shasw94/projX/app/models/pivot"
 	"github.com/shasw94/projX/app/schema"
 	"github.com/shasw94/projX/pkg/errors"
 	"github.com/shasw94/projX/pkg/utils"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // UserRepo user repository struct
@@ -102,4 +105,142 @@ func (u *UserRepo) Update(userID string, bodyParam *schema.UserUpdateBodyParam) 
 	}
 
 	return &change, nil
+}
+
+// AddPermissions and direct permission to user
+// @param string
+// @param schema.Permission
+// @return error
+func (u *UserRepo) AddPermissions(userID string, permissions schema.Permission) error {
+	var userPermissions []pivot.UserPermission
+	for _, permission := range permissions.Origin() {
+		userPermissions = append(userPermissions, pivot.UserPermission{
+			UserID:       userID,
+			PermissionID: permission.ID,
+		})
+	}
+	return u.db.GetInstance().Clauses(clause.OnConflict{DoNothing: true}).Create(&userPermissions).Error
+}
+
+func (u *UserRepo) ReplacePermissions(userID string, permissions schema.Permission) error {
+	return u.db.GetInstance().Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_permissions.user_id = ?", userID).Delete(&pivot.UserPermission{}).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+
+		var userPermissions []pivot.UserPermission
+		for _, permission := range permissions.Origin() {
+			userPermissions = append(userPermissions, pivot.UserPermission{
+				UserID:       userID,
+				PermissionID: permission.ID,
+			})
+		}
+
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&userPermissions).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+
+		return nil
+	})
+}
+
+func (u *UserRepo) RemovePermissions(userId string, permissions schema.Permission) error {
+	var userPermissions []pivot.UserPermission
+	for _, permission := range permissions.Origin() {
+		userPermissions = append(userPermissions, pivot.UserPermission{
+			UserID:       userId,
+			PermissionID: permission.ID,
+		})
+	}
+	return u.db.GetInstance().Delete(&userPermissions).Error
+}
+
+func (u *UserRepo) ClearPermissions(userID string) (err error) {
+	return u.db.GetInstance().Where("user_permissions.user_id = ?", userID).Delete(&pivot.UserPermission{}).Error
+}
+
+func (u *UserRepo) AddRoles(userId string, roles schema.Roles) error {
+	var userRoles []pivot.UserRole
+	for _, role := range roles.Origin() {
+		userRoles = append(userRoles, pivot.UserRole{
+			UserID: userId,
+			RoleID: role.ID,
+		})
+	}
+	return u.db.GetInstance().Clauses(clause.OnConflict{DoNothing: true}).Create(&userRoles).Error
+}
+
+func (u *UserRepo) ReplaceRoles(userId string, roles schema.Roles) error {
+	return u.db.GetInstance().Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_roles.user_id = ?", userId).Delete(&pivot.UserRole{}).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+		var userRoles []pivot.UserRole
+		for _, role := range roles.Origin() {
+			userRoles = append(userRoles, pivot.UserRole{
+				UserID: userId,
+				RoleID: role.ID,
+			})
+		}
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&userRoles).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+		return nil
+	})
+}
+
+func (u *UserRepo) RemoveRoles(userId string, roles schema.Roles) error {
+	var userRoles []pivot.UserRole
+	for _, role := range roles.Origin() {
+		userRoles = append(userRoles, pivot.UserRole{
+			UserID: userId,
+			RoleID: role.ID,
+		})
+	}
+	return u.db.GetInstance().Delete(&userRoles).Error
+}
+
+func (u *UserRepo) ClearRoles(userId string) (err error) {
+	return u.db.GetInstance().Where("user_roles.user_id = ?", userId).Delete(&pivot.UserRole{}).Error
+}
+
+func (u *UserRepo) HasRole(userId string, role models.Role) (b bool, err error) {
+	var count int64
+	err = u.db.GetInstance().Table("user_roles").Where("user_roles.user_id = ?", userId).Where("user_roles.role_id = ?", role.ID).Count(&count).Error
+	return count > 0, err
+}
+
+func (u *UserRepo) HasAllRoles(userId string, roles schema.Roles) (b bool, err error) {
+	var count int64
+	err = u.db.GetInstance().Table("user_roles").Where("user_roles.user_id = ?", userId).Where("user_roles.role_id IN (?)", roles.IDs()).Count(&count).Error
+	return roles.Len() == count, err
+}
+
+func (u *UserRepo) HasAnyRoles(userID string, roles schema.Roles) (b bool, err error) {
+	var count int64
+	err = u.db.GetInstance().Table("user_roles").Where("user_roles.user_id = ?", userID).Where("user_roles.role_id IN (?)", roles.IDs()).Count(&count).Error
+	return count > 0, err
+}
+
+// HasDirectPermission does the user have the given permission? (not including the permissios of the roles)
+func (u *UserRepo) HasDirectPermission(userID string, permission models.Permission) (b bool, err error) {
+	var count int64
+	err = u.db.GetInstance().Table("user_permissions").Where("user_permissions.user_id = ?", userID).Where("user_permissions.permission_id = ?", permission.ID).Count(&count).Error
+	return count > 0, err
+}
+
+func (u *UserRepo) HasAllDirectPermissions(userID string, permissions schema.Permission) (b bool, err error) {
+	var count int64
+	err = u.db.GetInstance().Table("user_permissions").Where("user_permissions.user_id = ?", userID).Where("user_permissions.permission_id IN (?)", permissions.IDs()).Count(&count).Error
+	return permissions.Len() == count, err
+}
+
+func (u *UserRepo) HasAnyDirectPermissions(userID string, permissions schema.Permission) (b bool, err error) {
+	var count int64
+	err = u.db.GetInstance().Table("user_permissions").Where("user_permissions.user_id = ?", userID).Where("user_permissions.permission_id IN (?)", permissions.IDs()).Count(&count).Error
+	return count > 0, err
 }
